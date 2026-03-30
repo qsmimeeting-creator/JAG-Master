@@ -1,4 +1,4 @@
-import { collection, addDoc, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, limit, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { Question, QuizSession } from '../types';
 
@@ -134,5 +134,86 @@ export async function saveQuestionsToBank(questions: Question[], category: strin
   } catch (error) {
     // Just log for bank saving, don't throw to avoid stopping the quiz
     console.warn("Could not save questions to bank (cache):", error);
+  }
+}
+
+// --- Admin CRUD Functions ---
+
+export async function getAllQuestions(): Promise<Question[]> {
+  if (!db) return [];
+  try {
+    const q = query(collection(db, BANK_COLLECTION), orderBy('createdAt', 'desc'));
+    const querySnapshot = await getDocs(q);
+    const questions: Question[] = [];
+    querySnapshot.forEach((doc) => {
+      questions.push({ id: doc.id, ...doc.data() } as Question);
+    });
+    return questions;
+  } catch (error) {
+    console.error("Could not get all questions:", error);
+    return [];
+  }
+}
+
+export async function addQuestion(question: Omit<Question, 'id'>): Promise<string | undefined> {
+  if (!db) return;
+  try {
+    const docRef = await addDoc(collection(db, BANK_COLLECTION), {
+      ...question,
+      createdAt: Date.now()
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error("Could not add question:", error);
+    throw error;
+  }
+}
+
+export async function updateQuestion(id: string, question: Partial<Question>): Promise<void> {
+  if (!db) return;
+  try {
+    const docRef = doc(db, BANK_COLLECTION, id);
+    await updateDoc(docRef, question);
+  } catch (error) {
+    console.error("Could not update question:", error);
+    throw error;
+  }
+}
+
+export async function deleteQuestion(id: string): Promise<void> {
+  if (!db) return;
+  try {
+    const docRef = doc(db, BANK_COLLECTION, id);
+    await deleteDoc(docRef);
+  } catch (error) {
+    console.error("Could not delete question:", error);
+    throw error;
+  }
+}
+
+export async function getAllResults(): Promise<(QuizSession & { id: string })[]> {
+  if (!db) return [];
+  try {
+    const q = query(collection(db, RESULTS_COLLECTION), orderBy('createdAt', 'desc'));
+    const querySnapshot = await getDocs(q);
+    const results: (QuizSession & { id: string })[] = [];
+    querySnapshot.forEach((doc) => {
+      results.push({ id: doc.id, ...doc.data() } as (QuizSession & { id: string }));
+    });
+    return results;
+  } catch (error) {
+    console.error("Could not get all results:", error);
+    return [];
+  }
+}
+
+export async function deleteResult(id: string): Promise<void> {
+  if (!db) return;
+  try {
+    const docRef = doc(db, RESULTS_COLLECTION, id);
+    await deleteDoc(docRef);
+  } catch (error) {
+    console.error("Could not delete result:", error);
+    throw error;
   }
 }

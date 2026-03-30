@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import Welcome from './components/Welcome';
 import Quiz from './components/Quiz';
 import Result from './components/Result';
+import Admin from './components/Admin';
 import { generateQuestions } from './lib/gemini';
 import { saveQuizResult } from './lib/db';
 import { QuizSession } from './types';
 
-type ViewState = 'welcome' | 'quiz' | 'result';
+type ViewState = 'welcome' | 'quiz' | 'result' | 'admin';
 
 export default function App() {
   const [view, setView] = useState<ViewState>('welcome');
@@ -67,13 +68,16 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4 font-sans selection:bg-yellow-200">
       {view === 'welcome' && (
-        <Welcome onStart={handleStart} loading={loading} />
+        <Welcome onStart={handleStart} loading={loading} onAdminClick={() => setView('admin')} />
       )}
       {view === 'quiz' && session && (
         <Quiz questions={session.questions} onFinish={handleFinish} source={session.source} />
       )}
       {view === 'result' && session && (
         <Result session={session} onRestart={handleRestart} />
+      )}
+      {view === 'admin' && (
+        <Admin onBack={() => setView('welcome')} />
       )}
     </div>
   );

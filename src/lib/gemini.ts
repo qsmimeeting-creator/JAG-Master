@@ -88,7 +88,6 @@ STRICT RULES:
             model: 'gemini-3-flash-preview',
             contents: chunkPrompt,
             config: {
-              tools: [{ googleSearch: {} }],
               responseMimeType: 'application/json',
               responseSchema: {
                 type: Type.ARRAY,

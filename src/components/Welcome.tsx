@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Scale, Shield, Gavel, FileText, User, Loader2 } from 'lucide-react';
+import { BookOpen, Scale, Shield, Gavel, FileText, User, Loader2, Lock } from 'lucide-react';
 
 const categories = [
   { id: 'general', label: 'ความรู้ความสามารถทั่วไป', icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
@@ -12,9 +12,10 @@ const categories = [
 interface WelcomeProps {
   onStart: (name: string, category: string) => void;
   loading: boolean;
+  onAdminClick: () => void;
 }
 
-export default function Welcome({ onStart, loading }: WelcomeProps) {
+export default function Welcome({ onStart, loading, onAdminClick }: WelcomeProps) {
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
 
@@ -115,6 +116,16 @@ export default function Welcome({ onStart, loading }: WelcomeProps) {
             ) : 'เริ่มทำแบบทดสอบ'}
           </button>
         </div>
+      </div>
+      
+      {/* Admin Link */}
+      <div className="bg-slate-50 py-3 text-center border-t border-slate-100">
+        <button 
+          onClick={onAdminClick}
+          className="text-xs text-slate-400 hover:text-slate-600 flex items-center justify-center gap-1 mx-auto transition-colors"
+        >
+          <Lock className="w-3 h-3" /> ผู้ดูแลระบบ
+        </button>
       </div>
     </div>
   );
