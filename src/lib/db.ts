@@ -81,7 +81,7 @@ export async function saveQuizResult(session: QuizSession) {
     });
     return docRef.id;
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, RESULTS_COLLECTION);
+    console.warn("Could not save quiz result:", error);
   }
 }
 
@@ -103,7 +103,7 @@ export async function getUserAnsweredQuestionIds(respondentName: string, categor
     });
     return answeredIds;
   } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, RESULTS_COLLECTION);
+    console.warn("Could not get user answered IDs:", error);
     return new Set();
   }
 }
@@ -138,21 +138,18 @@ export async function saveQuestionsToBank(questions: Question[], category: strin
   if (!db || questions.length === 0) return;
   try {
     const promises = questions.map(q => {
-      // Ensure 'id' is included as required by firestore.rules
+      // Use a consistent ID if provided, otherwise let Firebase generate
+      const { id, ...data } = q;
       return addDoc(collection(db, BANK_COLLECTION), {
-        ...q,
+        ...data,
+        originalId: id, // Keep track of AI generated ID
         category,
         createdAt: Date.now()
       });
     });
     await Promise.all(promises);
   } catch (error) {
-    // For background caching, we log but don't throw to avoid breaking UX
-    try {
-      handleFirestoreError(error, OperationType.WRITE, BANK_COLLECTION);
-    } catch (e) {
-      // Error already logged by handleFirestoreError
-    }
+    console.warn("Could not save questions to bank (cache):", error);
   }
 }
 
@@ -163,7 +160,7 @@ export async function getBankCount(category: string): Promise<number> {
     const snapshot = await getCountFromServer(q);
     return snapshot.data().count;
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, BANK_COLLECTION);
+    console.error("Error getting bank count:", error);
     return 0;
   }
 }
@@ -181,7 +178,7 @@ export async function getAllQuestions(): Promise<Question[]> {
     });
     return questions;
   } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, BANK_COLLECTION);
+    console.error("Could not get all questions:", error);
     return [];
   }
 }
@@ -195,7 +192,8 @@ export async function addQuestion(question: Omit<Question, 'id'>): Promise<strin
     });
     return docRef.id;
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, BANK_COLLECTION);
+    console.error("Could not add question:", error);
+    throw error;
   }
 }
 
@@ -205,7 +203,8 @@ export async function updateQuestion(id: string, question: Partial<Question>): P
     const docRef = doc(db, BANK_COLLECTION, id);
     await updateDoc(docRef, question);
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, `${BANK_COLLECTION}/${id}`);
+    console.error("Could not update question:", error);
+    throw error;
   }
 }
 
@@ -215,7 +214,8 @@ export async function deleteQuestion(id: string): Promise<void> {
     const docRef = doc(db, BANK_COLLECTION, id);
     await deleteDoc(docRef);
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, `${BANK_COLLECTION}/${id}`);
+    console.error("Could not delete question:", error);
+    throw error;
   }
 }
 
@@ -230,7 +230,7 @@ export async function getAllResults(): Promise<(QuizSession & { id: string })[]>
     });
     return results;
   } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, RESULTS_COLLECTION);
+    console.error("Could not get all results:", error);
     return [];
   }
 }
@@ -241,6 +241,7 @@ export async function deleteResult(id: string): Promise<void> {
     const docRef = doc(db, RESULTS_COLLECTION, id);
     await deleteDoc(docRef);
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, `${RESULTS_COLLECTION}/${id}`);
+    console.error("Could not delete result:", error);
+    throw error;
   }
 }

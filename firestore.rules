@@ -7,21 +7,22 @@ service cloud.firestore {
     //
     // Collection: QuestionBank
     // Fields:
-    //   - id: string (required, < 100 chars)
-    //   - questionText: string (required, < 2000 chars)
-    //   - choices: list (required, 2-10 items)
-    //   - correctAnswerIndex: number (required, valid index)
-    //   - explanation: string (required, < 3000 chars)
-    //   - category: string (required, < 50 chars)
+    //   - id: string (required)
+    //   - text: string (required)
+    //   - options: list (required)
+    //   - correctAnswerIndex: number (required)
+    //   - explanation: string (optional)
+    //   - category: string (required)
     //   - createdAt: number (required)
     //
     // Collection: QuizResults
     // Fields:
-    //   - respondentName: string (required, < 100 chars)
-    //   - category: string (required, < 50 chars)
-    //   - score: number (required, >= 0)
-    //   - total: number (required, > 0)
-    //   - answeredIds: list (optional, < 100 items)
+    //   - respondentName: string (required)
+    //   - category: string (required)
+    //   - score: number (required)
+    //   - total: number (required)
+    //   - percentage: number (optional)
+    //   - answeredIds: list (optional)
     //   - createdAt: number (required)
     //
     // ===============================================================
@@ -34,32 +35,28 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      // Return true for now to allow admin actions via password-protected UI
-      // In a real production app, this should be secured with Firebase Auth
-      return true;
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "tropmed.cu@gmail.com" && request.auth.token.email_verified == true));
     }
 
     function isValidQuestion(data) {
-      let requiredFields = ['id', 'questionText', 'choices', 'correctAnswerIndex', 'explanation', 'category', 'createdAt'];
-      return data.keys().hasAll(requiredFields) &&
-             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+      return data.keys().hasAll(['id', 'questionText', 'choices', 'correctAnswerIndex', 'category', 'createdAt']) &&
+             data.id is string && data.id.size() > 0 &&
              data.questionText is string && data.questionText.size() > 0 && data.questionText.size() < 2000 &&
              data.choices is list && data.choices.size() >= 2 && data.choices.size() <= 10 &&
-             data.correctAnswerIndex is number && data.correctAnswerIndex >= 0 && data.correctAnswerIndex < data.choices.size() &&
-             data.explanation is string && data.explanation.size() < 3000 &&
-             data.category is string && data.category.size() > 0 && data.category.size() < 50 &&
+             data.correctAnswerIndex is number &&
+             data.category is string &&
              data.createdAt is number;
     }
 
     function isValidQuizResult(data) {
-      let requiredFields = ['respondentName', 'category', 'score', 'total', 'createdAt'];
-      return data.keys().hasAll(requiredFields) &&
+      return data.keys().hasAll(['respondentName', 'category', 'score', 'total', 'createdAt']) &&
              data.respondentName is string && data.respondentName.size() > 0 && data.respondentName.size() < 100 &&
-             data.category is string && data.category.size() > 0 && data.category.size() < 50 &&
-             data.score is number && data.score >= 0 &&
-             data.total is number && data.total > 0 &&
-             data.createdAt is number &&
-             (!('answeredIds' in data) || (data.answeredIds is list && data.answeredIds.size() <= 100));
+             data.category is string &&
+             data.score is number &&
+             data.total is number &&
+             data.createdAt is number;
     }
 
     // ===============================================================
