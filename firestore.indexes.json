@@ -1,0 +1,33 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "QuizResults",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "respondentName",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "QuestionBank",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
