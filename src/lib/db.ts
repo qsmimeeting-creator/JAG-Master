@@ -67,7 +67,7 @@ export async function saveQuizResult(session: QuizSession) {
     });
     return docRef.id;
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, RESULTS_COLLECTION);
+    console.warn("Could not save quiz result:", error);
   }
 }
 
@@ -89,7 +89,7 @@ export async function getUserAnsweredQuestionIds(respondentName: string, categor
     });
     return answeredIds;
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, RESULTS_COLLECTION);
+    console.warn("Could not get user answered IDs:", error);
     return new Set();
   }
 }
@@ -115,7 +115,7 @@ export async function getQuestionsFromBank(category: string, excludeIds: Set<str
 
     return questions.sort(() => 0.5 - Math.random()).slice(0, count);
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, BANK_COLLECTION);
+    console.warn("Could not get questions from bank:", error);
     return [];
   }
 }
@@ -132,6 +132,7 @@ export async function saveQuestionsToBank(questions: Question[], category: strin
     });
     await Promise.all(promises);
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, BANK_COLLECTION);
+    // Just log for bank saving, don't throw to avoid stopping the quiz
+    console.warn("Could not save questions to bank (cache):", error);
   }
 }

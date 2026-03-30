@@ -41,10 +41,10 @@ service cloud.firestore {
     }
 
     function isValidQuestion(data) {
-      return data.keys().hasAll(['id', 'text', 'options', 'correctAnswerIndex', 'category', 'createdAt']) &&
+      return data.keys().hasAll(['id', 'questionText', 'choices', 'correctAnswerIndex', 'category', 'createdAt']) &&
              data.id is string && data.id.size() > 0 &&
-             data.text is string && data.text.size() > 0 && data.text.size() < 2000 &&
-             data.options is list && data.options.size() >= 2 && data.options.size() <= 10 &&
+             data.questionText is string && data.questionText.size() > 0 && data.questionText.size() < 2000 &&
+             data.choices is list && data.choices.size() >= 2 && data.choices.size() <= 10 &&
              data.correctAnswerIndex is number &&
              data.category is string &&
              data.createdAt is number;
@@ -66,8 +66,10 @@ service cloud.firestore {
     match /QuestionBank/{questionId} {
       // Allow read for everyone (authenticated or not) to access the bank
       allow read: if true;
-      // Only admin can create/update questions in the bank
-      allow create, update: if isAdmin() && isValidQuestion(request.resource.data);
+      // Allow everyone to create questions in the bank if they are valid (caching)
+      allow create: if isValidQuestion(request.resource.data);
+      // Only admin can update/delete questions in the bank
+      allow update: if isAdmin() && isValidQuestion(request.resource.data);
       allow delete: if isAdmin();
     }
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, CheckCircle, XCircle, Zap, Database } from 'lucide-react';
+import { ChevronLeft, CheckCircle, XCircle, Zap, Database, Clock, AlertCircle } from 'lucide-react';
 import { Question } from '../types';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import Markdown from 'react-markdown';
 
 interface QuizProps {
@@ -10,12 +10,38 @@ interface QuizProps {
   source?: string;
 }
 
+const TIME_PER_QUESTION = 90; // 90 seconds per question (15 mins for 10 questions)
+
 export default function Quiz({ questions, onFinish, source }: QuizProps) {
   const [idx, setIdx] = useState(0);
   const [ans, setAns] = useState<Record<number, number>>({});
+  const [timeLeft, setTimeLeft] = useState(questions.length * TIME_PER_QUESTION);
+  const [showTimeWarning, setShowTimeWarning] = useState(false);
+  
   const q = questions[idx];
   const isAnswered = ans[idx] !== undefined;
   const bottomRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          onFinish(ans);
+          return 0;
+        }
+        if (prev <= 60 && !showTimeWarning) {
+          setShowTimeWarning(true);
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [onFinish, ans, showTimeWarning]);
 
   useEffect(() => { 
     if (isAnswered && bottomRef.current) {
@@ -31,6 +57,14 @@ export default function Quiz({ questions, onFinish, source }: QuizProps) {
     return text.replace(/^([ก-ฮA-Za-z0-9]{1,2}[.):])\s+/, '');
   };
 
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const isLowTime = timeLeft <= 60;
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -38,9 +72,15 @@ export default function Quiz({ questions, onFinish, source }: QuizProps) {
       className="w-full max-w-2xl bg-white rounded-3xl shadow-lg p-6 sm:p-8 relative"
     >
       <div className="flex justify-between items-center mb-6">
-        <span className="text-sm font-bold text-slate-400 uppercase tracking-wide">
-          ข้อที่ {idx + 1} / {questions.length}
-        </span>
+        <div className="flex flex-col">
+          <span className="text-sm font-bold text-slate-400 uppercase tracking-wide">
+            ข้อที่ {idx + 1} / {questions.length}
+          </span>
+          <div className={`flex items-center gap-2 mt-1 font-mono font-bold text-lg ${isLowTime ? 'text-red-500 animate-pulse' : 'text-slate-600'}`}>
+            <Clock className={`w-5 h-5 ${isLowTime ? 'text-red-500' : 'text-slate-400'}`} />
+            {formatTime(timeLeft)}
+          </div>
+        </div>
         {source === 'bank' ? (
           <span className="text-[10px] px-2 py-1 rounded-full font-bold border bg-orange-50 text-orange-600 border-orange-100 flex items-center gap-1">
             <Database className="w-3 h-3" /> คลังข้อสอบ
@@ -52,6 +92,20 @@ export default function Quiz({ questions, onFinish, source }: QuizProps) {
         )}
       </div>
       
+      <AnimatePresence>
+        {showTimeWarning && timeLeft > 0 && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-red-500 text-white px-4 py-2 rounded-full shadow-xl flex items-center gap-2 text-sm font-bold whitespace-nowrap"
+          >
+            <AlertCircle className="w-4 h-4" />
+            เหลือเวลาอีกไม่ถึง 1 นาที!
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="w-full bg-slate-100 h-2 rounded-full mb-8 overflow-hidden">
         <div 
           className="bg-yellow-500 h-full transition-all duration-500 ease-out" 

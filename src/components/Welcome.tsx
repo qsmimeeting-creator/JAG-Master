@@ -77,7 +77,10 @@ export default function Welcome({ onStart, loading }: WelcomeProps) {
           </div>
         </div>
 
-        <div className="pt-4">
+        <div className="pt-4 space-y-3">
+          <p className="text-center text-xs text-slate-400 font-medium">
+            * มีเวลาทำข้อสอบ 15 นาที (10 ข้อ)
+          </p>
           <button 
             onClick={handleStart} 
             disabled={!category || !name.trim() || loading} 
