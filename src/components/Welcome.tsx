@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Scale, Shield, Gavel, FileText, User, Loader2, Lock } from 'lucide-react';
+import { preGenerateQuestions } from '../lib/gemini';
+import { getBankCount, testConnection } from '../lib/db';
 
 const categories = [
   { id: 'general', label: 'ความรู้ความสามารถทั่วไป', icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
@@ -22,17 +24,34 @@ export default function Welcome({ onStart, loading, onAdminClick }: WelcomeProps
   const [loadingMessage, setLoadingMessage] = useState('กำลังสร้างข้อสอบ...');
 
   useEffect(() => {
+    // Test connection on mount
+    testConnection();
+
+    // Background pre-generation
+    const checkAndPreGen = async () => {
+      for (const cat of categories) {
+        const count = await getBankCount(cat.id);
+        if (count < 20) {
+          console.log(`Pre-generating for ${cat.id} (current count: ${count})`);
+          preGenerateQuestions(cat.id);
+        }
+      }
+    };
+    checkAndPreGen();
+  }, []);
+
+  useEffect(() => {
     if (!loading) {
       setLoadingMessage('กำลังสร้างข้อสอบ...');
       return;
     }
 
     const messages = [
-      'กำลังเตรียมโจทย์...',
-      'กำลังวิเคราะห์หลักกฎหมาย...',
-      'กำลังจัดทำตัวเลือก...',
-      'เกือบเสร็จแล้ว...',
-      'กำลังตรวจสอบความถูกต้อง...'
+      'กำลังวิเคราะห์เนื้อหากฎหมายล่าสุด...',
+      'กำลังสุ่มโจทย์ที่น่าสนใจ...',
+      'กำลังตรวจสอบความถูกต้องของเฉลย...',
+      'อีกสักครู่ ระบบกำลังจัดเตรียมชุดข้อสอบ...',
+      'เกือบเสร็จแล้ว เตรียมตัวให้พร้อม!'
     ];
     let i = 0;
     const interval = setInterval(() => {

@@ -1,9 +1,23 @@
-import { collection, addDoc, query, where, getDocs, limit, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, limit, orderBy, doc, updateDoc, deleteDoc, getCountFromServer, getDocFromServer } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { Question, QuizSession } from '../types';
 
 const BANK_COLLECTION = 'QuestionBank';
 const RESULTS_COLLECTION = 'QuizResults';
+
+// --- Connection Test ---
+export async function testConnection() {
+  if (!db) return;
+  try {
+    // Use getDocFromServer to test real connection as per instructions
+    await getDocFromServer(doc(db, 'system', 'health'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error("Please check your Firebase configuration. The client is offline.");
+    }
+  }
+}
+testConnection();
 
 enum OperationType {
   CREATE = 'create',
@@ -124,16 +138,30 @@ export async function saveQuestionsToBank(questions: Question[], category: strin
   if (!db || questions.length === 0) return;
   try {
     const promises = questions.map(q => {
+      // Use a consistent ID if provided, otherwise let Firebase generate
+      const { id, ...data } = q;
       return addDoc(collection(db, BANK_COLLECTION), {
-        ...q,
+        ...data,
+        originalId: id, // Keep track of AI generated ID
         category,
         createdAt: Date.now()
       });
     });
     await Promise.all(promises);
   } catch (error) {
-    // Just log for bank saving, don't throw to avoid stopping the quiz
     console.warn("Could not save questions to bank (cache):", error);
+  }
+}
+
+export async function getBankCount(category: string): Promise<number> {
+  if (!db) return 0;
+  try {
+    const q = query(collection(db, BANK_COLLECTION), where('category', '==', category));
+    const snapshot = await getCountFromServer(q);
+    return snapshot.data().count;
+  } catch (error) {
+    console.error("Error getting bank count:", error);
+    return 0;
   }
 }
 
