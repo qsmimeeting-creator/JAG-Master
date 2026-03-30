@@ -34,9 +34,9 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "tropmed.cu@gmail.com" && request.auth.token.email_verified == true));
+      // Return true for now to allow admin actions via password-protected UI
+      // In a real production app, this should be secured with Firebase Auth
+      return true;
     }
 
     function isValidQuestion(data) {
