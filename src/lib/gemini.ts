@@ -40,6 +40,8 @@ export async function generateQuestions(category: string, respondentName: string
 
   // 3. Generate missing questions via Gemini
   const needed = TARGET_COUNT - finalQuestions.length;
+  if (needed <= 0) return { questions: finalQuestions, source: 'bank' };
+
   let categoryContext = '';
   switch (category) {
     case 'general': categoryContext = 'ความรู้ความสามารถทั่วไป (คณิตศาสตร์, ภาษาไทย, ภาษาอังกฤษ, ความรู้ทั่วไป)'; break;
@@ -50,11 +52,21 @@ export async function generateQuestions(category: string, respondentName: string
     default: categoryContext = 'กฎหมายทั่วไป';
   }
 
-  const prompt = `
+  // Split into chunks if needed > 5 to speed up generation
+  const chunkSize = needed > 5 ? Math.ceil(needed / 2) : needed;
+  const numChunks = Math.ceil(needed / chunkSize);
+  const chunkPromises = [];
+
+  for (let i = 0; i < numChunks; i++) {
+    const count = (i === numChunks - 1) ? needed - (i * chunkSize) : chunkSize;
+    if (count <= 0) continue;
+
+    const chunkPrompt = `
 Role: ผู้เชี่ยวชาญด้านกฎหมายและติวเตอร์เตรียมสอบนายทหารพระธรรมนูญ (ทหารชั้นสัญญาบัตร สายงานนิติศาสตร์)
-Task: สร้างข้อสอบปรนัย (Multiple Choice) จำนวน ${needed} ข้อที่ไม่ซ้ำกัน
+Task: สร้างข้อสอบปรนัย (Multiple Choice) จำนวน ${count} ข้อที่ไม่ซ้ำกัน
 Topic: ${categoryContext}
 Level: ระดับปานกลางถึงยาก (เน้นการปรับใช้หลักกฎหมายและวิเคราะห์)
+Focus: ${i === 0 ? 'เน้นหลักการพื้นฐานและมาตราสำคัญ' : 'เน้นกรณีศึกษาและการตีความ'}
 
 STRICT RULES:
 1. ACCURACY: คำถามและคำตอบต้องถูกต้องตามหลักกฎหมายไทยปัจจุบัน หรือความรู้ทั่วไปที่ถูกต้อง
@@ -64,63 +76,64 @@ STRICT RULES:
 5. Explanation: อธิบายเหตุผลทางกฎหมายหรือหลักการที่ถูกต้องอย่างชัดเจน พร้อมอ้างอิงมาตราถ้ามี (สามารถใช้ Markdown เช่น **ตัวหนา** หรือการขึ้นบรรทัดใหม่ได้)
 `;
 
-  let aiQuestions: Question[] = [];
-  let retries = 2;
-  
-  while (retries > 0 && aiQuestions.length === 0) {
-    try {
-      const apiKey = getRandomApiKey();
-      if (!apiKey) throw new Error('No API Key found');
-      
-      const ai = new GoogleGenAI({ apiKey });
-      
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                questionText: { type: Type.STRING, description: 'คำถาม' },
-                choices: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                  description: 'ตัวเลือก 4 ข้อ (ก, ข, ค, ง)'
+    chunkPromises.push((async () => {
+      let retries = 2;
+      while (retries > 0) {
+        try {
+          const apiKey = getRandomApiKey();
+          if (!apiKey) throw new Error('No API Key found');
+          
+          const ai = new GoogleGenAI({ apiKey });
+          const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: chunkPrompt,
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    questionText: { type: Type.STRING, description: 'คำถาม' },
+                    choices: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING },
+                      description: 'ตัวเลือก 4 ข้อ (ก, ข, ค, ง)'
+                    },
+                    correctAnswerIndex: { type: Type.INTEGER, description: 'index ของคำตอบที่ถูกต้อง (0-3)' },
+                    explanation: { type: Type.STRING, description: 'คำอธิบายเฉลย (ใช้ Markdown ได้)' },
+                  },
+                  required: ['questionText', 'choices', 'correctAnswerIndex', 'explanation'],
                 },
-                correctAnswerIndex: { type: Type.INTEGER, description: 'index ของคำตอบที่ถูกต้อง (0-3)' },
-                explanation: { type: Type.STRING, description: 'คำอธิบายเฉลย (ใช้ Markdown ได้)' },
               },
-              required: ['questionText', 'choices', 'correctAnswerIndex', 'explanation'],
+              temperature: 0.8,
             },
-          },
-          temperature: 0.7,
-        },
-      });
+          });
 
-      const text = response.text;
-      if (!text) throw new Error('No response from Gemini');
-      
-      aiQuestions = JSON.parse(text).map((q: any, index: number) => ({
-        ...q,
-        id: `ai_${Date.now()}_${index}`,
-        category,
-        createdAt: Date.now()
-      }));
-      
-      break; // Success
-    } catch (error) {
-      console.error(`Error generating questions (retries left: ${retries - 1}):`, error);
-      retries--;
-      if (retries === 0) {
-        // Fallback if all retries fail
-        if (finalQuestions.length === 0) {
-          return { questions: FALLBACK_QUESTIONS, source: 'fallback' };
+          const text = response.text;
+          if (!text) throw new Error('No response from Gemini');
+          
+          return JSON.parse(text).map((q: any, index: number) => ({
+            ...q,
+            id: `ai_${Date.now()}_${i}_${index}`,
+            category,
+            createdAt: Date.now()
+          }));
+        } catch (error) {
+          console.error(`Error in chunk ${i} (retries left: ${retries - 1}):`, error);
+          retries--;
+          if (retries === 0) return [];
         }
       }
-    }
+      return [];
+    })());
+  }
+
+  const results = await Promise.all(chunkPromises);
+  let aiQuestions: Question[] = results.flat();
+
+  if (aiQuestions.length === 0 && finalQuestions.length === 0) {
+    return { questions: FALLBACK_QUESTIONS, source: 'fallback' };
   }
 
   if (aiQuestions.length > 0) {

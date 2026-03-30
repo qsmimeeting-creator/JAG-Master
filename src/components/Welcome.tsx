@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BookOpen, Scale, Shield, Gavel, FileText, User, Loader2 } from 'lucide-react';
 
 const categories = [
@@ -17,6 +17,30 @@ interface WelcomeProps {
 export default function Welcome({ onStart, loading }: WelcomeProps) {
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
+
+  const [loadingMessage, setLoadingMessage] = useState('กำลังสร้างข้อสอบ...');
+
+  useEffect(() => {
+    if (!loading) {
+      setLoadingMessage('กำลังสร้างข้อสอบ...');
+      return;
+    }
+
+    const messages = [
+      'กำลังเตรียมโจทย์...',
+      'กำลังวิเคราะห์หลักกฎหมาย...',
+      'กำลังจัดทำตัวเลือก...',
+      'เกือบเสร็จแล้ว...',
+      'กำลังตรวจสอบความถูกต้อง...'
+    ];
+    let i = 0;
+    const interval = setInterval(() => {
+      setLoadingMessage(messages[i % messages.length]);
+      i++;
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [loading]);
 
   const handleStart = () => {
     if (!name.trim() || !category) return;
@@ -78,9 +102,6 @@ export default function Welcome({ onStart, loading }: WelcomeProps) {
         </div>
 
         <div className="pt-4 space-y-3">
-          <p className="text-center text-xs text-slate-400 font-medium">
-            * มีเวลาทำข้อสอบ 15 นาที (10 ข้อ)
-          </p>
           <button 
             onClick={handleStart} 
             disabled={!category || !name.trim() || loading} 
@@ -89,7 +110,7 @@ export default function Welcome({ onStart, loading }: WelcomeProps) {
             {loading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" /> 
-                กำลังสร้างข้อสอบ...
+                {loadingMessage}
               </>
             ) : 'เริ่มทำแบบทดสอบ'}
           </button>
