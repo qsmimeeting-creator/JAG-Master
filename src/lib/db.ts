@@ -1,9 +1,60 @@
 import { collection, addDoc, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 import { Question, QuizSession } from '../types';
 
 const BANK_COLLECTION = 'QuestionBank';
 const RESULTS_COLLECTION = 'QuizResults';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 export async function saveQuizResult(session: QuizSession) {
   if (!db) return;
@@ -16,7 +67,7 @@ export async function saveQuizResult(session: QuizSession) {
     });
     return docRef.id;
   } catch (error) {
-    console.error("Error saving quiz result:", error);
+    handleFirestoreError(error, OperationType.WRITE, RESULTS_COLLECTION);
   }
 }
 
@@ -38,7 +89,7 @@ export async function getUserAnsweredQuestionIds(respondentName: string, categor
     });
     return answeredIds;
   } catch (error) {
-    console.error("Error getting user answered IDs:", error);
+    handleFirestoreError(error, OperationType.GET, RESULTS_COLLECTION);
     return new Set();
   }
 }
@@ -46,8 +97,6 @@ export async function getUserAnsweredQuestionIds(respondentName: string, categor
 export async function getQuestionsFromBank(category: string, excludeIds: Set<string>, count: number): Promise<Question[]> {
   if (!db) return [];
   try {
-    // We fetch a larger batch and filter out excluded IDs locally
-    // Firestore 'not-in' is limited to 10 items, so local filtering is safer for large sets
     const q = query(
       collection(db, BANK_COLLECTION),
       where('category', '==', category),
@@ -64,10 +113,9 @@ export async function getQuestionsFromBank(category: string, excludeIds: Set<str
       }
     });
 
-    // Shuffle and pick 'count'
     return questions.sort(() => 0.5 - Math.random()).slice(0, count);
   } catch (error) {
-    console.error("Error getting questions from bank:", error);
+    handleFirestoreError(error, OperationType.GET, BANK_COLLECTION);
     return [];
   }
 }
@@ -84,6 +132,6 @@ export async function saveQuestionsToBank(questions: Question[], category: strin
     });
     await Promise.all(promises);
   } catch (error) {
-    console.error("Error saving questions to bank:", error);
+    handleFirestoreError(error, OperationType.WRITE, BANK_COLLECTION);
   }
 }

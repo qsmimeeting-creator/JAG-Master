@@ -1,0 +1,44 @@
+{
+  "entities": {
+    "Question": {
+      "title": "Question",
+      "description": "A quiz question",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "options": { "type": "array", "items": { "type": "string" } },
+        "correctAnswerIndex": { "type": "integer" },
+        "explanation": { "type": "string" },
+        "category": { "type": "string" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "text", "options", "correctAnswerIndex", "category"]
+    },
+    "QuizResult": {
+      "title": "QuizResult",
+      "description": "A result of a quiz session",
+      "type": "object",
+      "properties": {
+        "respondentName": { "type": "string" },
+        "category": { "type": "string" },
+        "score": { "type": "integer" },
+        "total": { "type": "integer" },
+        "percentage": { "type": "integer" },
+        "answeredIds": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["respondentName", "category", "score", "total", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/QuestionBank": {
+      "schema": "Question",
+      "description": "Bank of generated questions"
+    },
+    "/QuizResults": {
+      "schema": "QuizResult",
+      "description": "Results of quiz sessions"
+    }
+  }
+}

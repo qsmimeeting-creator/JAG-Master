@@ -1,0 +1,89 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: QuestionBank
+    // Fields:
+    //   - id: string (required)
+    //   - text: string (required)
+    //   - options: list (required)
+    //   - correctAnswerIndex: number (required)
+    //   - explanation: string (optional)
+    //   - category: string (required)
+    //   - createdAt: number (required)
+    //
+    // Collection: QuizResults
+    // Fields:
+    //   - respondentName: string (required)
+    //   - category: string (required)
+    //   - score: number (required)
+    //   - total: number (required)
+    //   - percentage: number (optional)
+    //   - answeredIds: list (optional)
+    //   - createdAt: number (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "tropmed.cu@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidQuestion(data) {
+      return data.keys().hasAll(['id', 'text', 'options', 'correctAnswerIndex', 'category', 'createdAt']) &&
+             data.id is string && data.id.size() > 0 &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 2000 &&
+             data.options is list && data.options.size() >= 2 && data.options.size() <= 10 &&
+             data.correctAnswerIndex is number &&
+             data.category is string &&
+             data.createdAt is number;
+    }
+
+    function isValidQuizResult(data) {
+      return data.keys().hasAll(['respondentName', 'category', 'score', 'total', 'createdAt']) &&
+             data.respondentName is string && data.respondentName.size() > 0 && data.respondentName.size() < 100 &&
+             data.category is string &&
+             data.score is number &&
+             data.total is number &&
+             data.createdAt is number;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /QuestionBank/{questionId} {
+      // Allow read for everyone (authenticated or not) to access the bank
+      allow read: if true;
+      // Only admin can create/update questions in the bank
+      allow create, update: if isAdmin() && isValidQuestion(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /QuizResults/{resultId} {
+      // Allow read for everyone to check for answered questions
+      allow read: if true;
+      // Allow create for everyone to save results
+      allow create: if isValidQuizResult(request.resource.data);
+      // Only admin can update/delete results
+      allow update: if isAdmin() && isValidQuizResult(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin();
+    }
+  }
+}
