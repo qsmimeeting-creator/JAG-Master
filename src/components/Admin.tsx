@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, LogOut, Trash2, Edit, Plus, RefreshCw } from 'lucide-react';
+import { Lock, LogOut, Trash2, Edit, Plus, RefreshCw, User } from 'lucide-react';
 import { Question, QuizSession } from '../types';
 import { getAllQuestions, addQuestion, updateQuestion, deleteQuestion, getAllResults, deleteResult } from '../lib/db';
+import { auth } from '../lib/firebase';
+import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
 interface AdminProps {
   onBack: () => void;
@@ -9,6 +11,7 @@ interface AdminProps {
 
 export default function Admin({ onBack }: AdminProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   
@@ -27,7 +30,17 @@ export default function Admin({ onBack }: AdminProps) {
     category: 'general'
   });
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      // If user is logged in as the admin email, we can auto-authenticate if they've also entered the password
+      // or just require both for extra security.
+    });
+    return () => unsubscribe();
+  }, []);
+
   const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin1234';
+  const ADMIN_EMAIL = 'tropmed.cu@gmail.com';
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +50,17 @@ export default function Admin({ onBack }: AdminProps) {
       fetchData();
     } else {
       setError('รหัสผ่านไม่ถูกต้อง');
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      setError('');
+    } catch (err) {
+      console.error(err);
+      setError('ไม่สามารถเข้าสู่ระบบด้วย Google ได้');
     }
   };
 
@@ -108,31 +132,72 @@ export default function Admin({ onBack }: AdminProps) {
           </div>
         </div>
         <h2 className="text-2xl font-bold text-center text-slate-800 mb-6">ผู้ดูแลระบบ</h2>
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="รหัสผ่าน"
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-500"
-            />
+        
+        <div className="space-y-6">
+          {/* Google Login Section */}
+          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+            <p className="text-xs text-slate-500 uppercase tracking-wider font-bold mb-3 text-center">Step 1: ยืนยันตัวตน (Firebase Auth)</p>
+            {user ? (
+              <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-3">
+                  {user.photoURL ? (
+                    <img src={user.photoURL} alt="" className="w-8 h-8 rounded-full" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center">
+                      <User className="w-4 h-4 text-slate-500" />
+                    </div>
+                  )}
+                  <div className="overflow-hidden">
+                    <p className="text-sm font-bold truncate">{user.displayName || 'User'}</p>
+                    <p className="text-xs text-slate-500 truncate">{user.email}</p>
+                  </div>
+                </div>
+                <button onClick={() => auth.signOut()} className="text-xs text-red-500 hover:underline">ออก</button>
+              </div>
+            ) : (
+              <button
+                onClick={handleGoogleLogin}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-white border border-slate-200 rounded-xl font-bold hover:bg-slate-50 transition-colors shadow-sm"
+              >
+                <img src="https://www.gstatic.com/firebase/explore/images/google-logo.svg" alt="" className="w-5 h-5" />
+                เข้าสู่ระบบด้วย Google
+              </button>
+            )}
+            {user && user.email !== ADMIN_EMAIL && (
+              <p className="text-xs text-amber-600 mt-2 text-center">คำเตือน: อีเมลนี้ไม่มีสิทธิ์จัดการข้อมูล</p>
+            )}
           </div>
-          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-          <button
-            type="submit"
-            className="w-full py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-colors"
-          >
-            เข้าสู่ระบบ
-          </button>
-          <button
-            type="button"
-            onClick={onBack}
-            className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors"
-          >
-            กลับหน้าหลัก
-          </button>
-        </form>
+
+          {/* Password Section */}
+          <form onSubmit={handleLogin} className="space-y-4">
+            <p className="text-xs text-slate-500 uppercase tracking-wider font-bold mb-1 text-center">Step 2: รหัสผ่านเข้าถึงแผงควบคุม</p>
+            <div>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="รหัสผ่าน Admin"
+                disabled={!user}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:opacity-50"
+              />
+            </div>
+            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+            <button
+              type="submit"
+              disabled={!user}
+              className="w-full py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-colors disabled:opacity-50 shadow-lg shadow-slate-200"
+            >
+              เข้าสู่ระบบ Admin
+            </button>
+            <button
+              type="button"
+              onClick={onBack}
+              className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+            >
+              กลับหน้าหลัก
+            </button>
+          </form>
+        </div>
       </div>
     );
   }
