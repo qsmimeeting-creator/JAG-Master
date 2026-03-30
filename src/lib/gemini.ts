@@ -5,11 +5,27 @@ import { getQuestionsFromBank, getUserAnsweredQuestionIds, saveQuestionsToBank }
 const FALLBACK_QUESTIONS: Question[] = [
   {
     id: 'fallback_1',
-    questionText: 'ระบบขัดข้องชั่วคราว ข้อใดคือหลักการพื้นฐานของกฎหมาย?',
-    choices: ['ความยุติธรรม', 'ความรวดเร็ว', 'ความประหยัด', 'ความสะดวก'],
+    questionText: 'ข้อใดคือหลักการพื้นฐานของกฎหมายอาญา?',
+    choices: ['ไม่มีความผิด ไม่มีโทษ โดยไม่มีกฎหมาย', 'ความยุติธรรมต้องมาก่อนกฎหมาย', 'ผู้ใดกระทำความผิดต้องได้รับโทษสถานหนัก', 'กฎหมายอาญาไม่มีผลย้อนหลังในทางที่เป็นคุณ'],
     correctAnswerIndex: 0,
-    explanation: 'หลักการพื้นฐานของกฎหมายคือการผดุงความยุติธรรมในสังคม',
-    category: 'general'
+    explanation: 'หลักการ "Nullum crimen, nulla poena sine lege" หมายถึงจะไม่มีความผิดและไม่มีโทษหากไม่มีกฎหมายกำหนดไว้ในขณะกระทำความผิด',
+    category: 'criminal'
+  },
+  {
+    id: 'fallback_2',
+    questionText: 'สัญญาจะซื้อจะขายอสังหาริมทรัพย์ หากไม่ได้ทำเป็นหนังสือและจดทะเบียนต่อพนักงานเจ้าหน้าที่ ผลจะเป็นอย่างไร?',
+    choices: ['โมฆะ', 'โมฆียะ', 'สมบูรณ์แต่ฟ้องร้องบังคับคดีไม่ได้', 'ใช้บังคับได้ระหว่างคู่สัญญา'],
+    correctAnswerIndex: 2,
+    explanation: 'สัญญาจะซื้อจะขายอสังหาริมทรัพย์ กฎหมายบังคับว่าต้องมีหลักฐานเป็นหนังสืออย่างใดอย่างหนึ่งลงลายมือชื่อฝ่ายผู้ต้องรับผิด หรือได้วางประจำ หรือได้ชำระหนี้บางส่วนแล้ว จึงจะฟ้องร้องบังคับคดีได้',
+    category: 'civil'
+  },
+  {
+    id: 'fallback_3',
+    questionText: 'ศาลทหารมีอำนาจพิจารณาพิพากษาคดีประเภทใด?',
+    choices: ['คดีอาญาที่บุคคลที่อยู่ในอำนาจศาลทหารกระทำผิด', 'คดีแพ่งที่ทหารเป็นคู่ความ', 'คดีปกครองที่เกี่ยวกับวินัยทหาร', 'ทุกคดีที่ทหารเกี่ยวข้อง'],
+    correctAnswerIndex: 0,
+    explanation: 'ศาลทหารมีอำนาจพิจารณาพิพากษาคดีอาญาที่บุคคลที่อยู่ในอำนาจศาลทหารเป็นผู้กระทำความผิดตามกฎหมายอาญาหรือกฎหมายอื่นที่มีโทษทางอาญา',
+    category: 'military'
   }
 ];
 
@@ -23,6 +39,54 @@ function getRandomApiKey(): string {
   }
   // Fallback to single key if multiple keys are not provided
   return import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+}
+
+async function callGeminiWithRetry(
+  prompt: string, 
+  config: any, 
+  retries = 3, 
+  delay = 2000
+): Promise<string> {
+  const models = ['gemini-3-flash-preview', 'gemini-1.5-flash'];
+  let lastError: any;
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    for (const modelName of models) {
+      try {
+        const apiKey = getRandomApiKey();
+        if (!apiKey) throw new Error('No API Key found');
+        
+        const ai = new GoogleGenAI({ apiKey });
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: prompt,
+          config: {
+            ...config,
+          },
+        });
+
+        const text = response.text;
+        if (text) return text;
+      } catch (error: any) {
+        lastError = error;
+        const is503 = error?.message?.includes('503') || error?.message?.includes('high demand') || error?.message?.includes('UNAVAILABLE');
+        const is429 = error?.message?.includes('429') || error?.message?.includes('Too Many Requests');
+
+        if (is503 || is429) {
+          console.warn(`Gemini API ${modelName} attempt ${attempt + 1} failed: ${error.message}. Retrying...`);
+          // Continue to next model or next retry
+          continue;
+        } else {
+          // For other errors, throw immediately
+          throw error;
+        }
+      }
+    }
+    // Wait before next retry attempt
+    await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, attempt)));
+  }
+
+  throw lastError || new Error('Failed to generate content after multiple retries');
 }
 
 export async function generateQuestions(category: string, respondentName: string): Promise<{ questions: Question[], source: string }> {
@@ -67,38 +131,27 @@ STRICT RULES:
 `;
 
   try {
-    const apiKey = getRandomApiKey();
-    if (!apiKey) throw new Error('No API Key found');
-    
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              questionText: { type: Type.STRING, description: 'คำถาม' },
-              choices: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-                description: 'ตัวเลือก 4 ข้อ (ก, ข, ค, ง)'
-              },
-              correctAnswerIndex: { type: Type.INTEGER, description: 'index ของคำตอบที่ถูกต้อง (0-3)' },
-              explanation: { type: Type.STRING, description: 'คำอธิบายเฉลย (ใช้ Markdown ได้)' },
+    const text = await callGeminiWithRetry(prompt, {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            questionText: { type: Type.STRING, description: 'คำถาม' },
+            choices: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: 'ตัวเลือก 4 ข้อ (ก, ข, ค, ง)'
             },
-            required: ['questionText', 'choices', 'correctAnswerIndex', 'explanation'],
+            correctAnswerIndex: { type: Type.INTEGER, description: 'index ของคำตอบที่ถูกต้อง (0-3)' },
+            explanation: { type: Type.STRING, description: 'คำอธิบายเฉลย (ใช้ Markdown ได้)' },
           },
+          required: ['questionText', 'choices', 'correctAnswerIndex', 'explanation'],
         },
-        temperature: 0.7,
       },
+      temperature: 0.7,
     });
-
-    const text = response.text;
-    if (!text) throw new Error('No response from Gemini');
     
     const aiQuestions = JSON.parse(text).map((q: any, index: number) => ({
       ...q,
@@ -144,33 +197,24 @@ STRICT RULES:
 `;
 
   try {
-    const apiKey = getRandomApiKey();
-    if (!apiKey) return;
-    
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              questionText: { type: Type.STRING },
-              choices: { type: Type.ARRAY, items: { type: Type.STRING } },
-              correctAnswerIndex: { type: Type.INTEGER },
-              explanation: { type: Type.STRING },
-            },
-            required: ['questionText', 'choices', 'correctAnswerIndex', 'explanation'],
+    const text = await callGeminiWithRetry(prompt, {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            questionText: { type: Type.STRING },
+            choices: { type: Type.ARRAY, items: { type: Type.STRING } },
+            correctAnswerIndex: { type: Type.INTEGER },
+            explanation: { type: Type.STRING },
           },
+          required: ['questionText', 'choices', 'correctAnswerIndex', 'explanation'],
         },
-        temperature: 0.9, // Higher temperature for variety in bank
       },
-    });
+      temperature: 0.9, // Higher temperature for variety in bank
+    }, 2, 3000); // Fewer retries for background task
 
-    const text = response.text;
     if (text) {
       const aiQuestions = JSON.parse(text).map((q: any, index: number) => ({
         ...q,

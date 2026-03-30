@@ -114,16 +114,16 @@ export default function Admin({ onBack }: AdminProps) {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="รหัสผ่าน"
+              placeholder="รหัสผ่าน Admin"
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-500"
             />
           </div>
           {error && <p className="text-red-500 text-sm text-center">{error}</p>}
           <button
             type="submit"
-            className="w-full py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-colors"
+            className="w-full py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-colors shadow-lg shadow-slate-200"
           >
-            เข้าสู่ระบบ
+            เข้าสู่ระบบ Admin
           </button>
           <button
             type="button"
